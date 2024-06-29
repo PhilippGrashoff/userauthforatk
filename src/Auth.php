@@ -25,14 +25,14 @@ class Auth
 
     protected static string $userModel = User::class;
 
-    public static function login(Model $user, string $username, string $password): void
+    public static function login(Model $userModel, string $username, string $password): void
     {
         // first logout
         self::logout();
-        //try load user
-        $user->assertIsModel();
+
+        $userModel->assertIsModel();
         //use tryLoadBy and throw generic exception to avoid username guessing
-        $userEntity = $user->tryLoadBy(self::$fieldLogin, $username);
+        $userEntity = $userModel->tryLoadBy(self::$fieldLogin, $username);
         if ($userEntity === null) {
             throw new Exception('Invalid username or Password');
         }
@@ -66,5 +66,32 @@ class Auth
             throw new Exception('Instance of wrong class stored in session, ' . self::$userModel . ' expected.');
         }
         return $_SESSION[self::$sessionKeyForUser];
+    }
+
+    /**
+     * This method should not be used unless for special occations where a user needs to be set, e.g.
+     * - a script run by a cronjob
+     * - an API script where the API key points to a user
+     *
+     * @param Model $userEntity
+     * @param bool $disallowOverwrite
+     * @return void
+     * @throws Exception
+     * @throws \Atk4\Data\Exception
+     */
+    public static function dangerouslySetLoggedInUser(Model $userEntity, bool $disallowOverwrite = true): void
+    {
+        $userEntity->assertIsLoaded();
+        if (
+            $disallowOverwrite
+            && isset($_SESSION[self::$sessionKeyForUser])
+            && $_SESSION[self::$sessionKeyForUser] !== null
+        ) {
+            throw new Exception('Cannot overwrite logged in user.');
+        }
+        if (!$userEntity instanceof self::$userModel) {
+            throw new Exception('Instance of wrong class passed. ' . self::$userModel . ' expected.');
+        }
+        $_SESSION[self::$sessionKeyForUser] = clone $userEntity;
     }
 }
