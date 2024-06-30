@@ -6,6 +6,7 @@ use Atk4\Core\Exception;
 use Atk4\Core\HookTrait;
 use Atk4\Data\Field\PasswordField;
 use Atk4\Data\Model;
+use Atk4\Data\Persistence;
 
 class Auth
 {
@@ -19,8 +20,19 @@ class Auth
     protected static string $sessionKeyForUser = '__atk_user';
 
     /** @var class-string|Model The user model class to check against */
-    protected static string $userModel = User::class;
+    public static string $userModel = User::class;
 
+    /**
+     * @param Model $userModel
+     * @param string $username
+     * @param string $password
+     * @param string $fieldUsername
+     * @param string $fieldPassword
+     * @return void
+     * @throws Exception
+     * @throws InvalidCredentialsException
+     * @throws \Atk4\Data\Exception
+     */
     public static function login(
         Model $userModel,
         string $username,
@@ -28,10 +40,12 @@ class Auth
         string $fieldUsername = 'username',
         string $fieldPassword = 'password'
     ): void {
-        // first logout
-        self::logout();
+        //login should only be possible if no logged-in user is set!
+        if (!empty($_SESSION[self::$sessionKeyForUser])) {
+            throw new Exception('A User is already logged in, logout prior to login!');
+        }
         $userModel->assertIsModel();
-        if(!$userModel instanceof self::$userModel) {
+        if (!$userModel instanceof self::$userModel) {
             throw new Exception('Instance of wrong class passed. ' . self::$userModel . ' expected.');
         }
 
@@ -48,32 +62,46 @@ class Auth
         $passwordField = PasswordField::assertInstanceOf($userEntity->getField($fieldPassword));
         if ($passwordField->verifyPassword($userEntity, $password)) {
             $userEntity->hook(self::HOOK_LOGGED_IN, [$userEntity]);
-            $_SESSION[self::$sessionKeyForUser] = clone $userEntity;
+            $_SESSION[self::$sessionKeyForUser] = $userEntity->get();
         } else {
             $userEntity->hook(self::HOOK_BAD_LOGIN, [$userEntity]);
             throw new InvalidCredentialsException();
         }
     }
 
+    /**
+     * TODO: Which actions/function calls are really sensible here?
+     *
+     * @return void
+     */
     public static function logout(): void
     {
-        session_destroy();
+        $_SESSION[self::$sessionKeyForUser] = null;
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
+        }
         session_start();
         session_regenerate_id();
-        $_SESSION[self::$sessionKeyForUser] = null;
     }
 
-    public static function getLoggedInUser(): Model
+    /**
+     * @param Persistence $persistence
+     * @return Model
+     * @throws Exception
+     */
+    public static function getLoggedInUser(Persistence $persistence): Model
     {
+        $userEntity = (new self::$userModel($persistence))->createEntity();;
         //load user from session cache
-        if (!isset($_SESSION[self::$sessionKeyForUser]) || $_SESSION[self::$sessionKeyForUser] === null) {
+        if (
+            !isset($_SESSION[self::$sessionKeyForUser])
+            || !isset($_SESSION[self::$sessionKeyForUser][$userEntity->idField])
+        ) {
             throw new Exception('No logged in user available');
         }
-        //this should never happen unless something really went wrong
-        if (!$_SESSION[self::$sessionKeyForUser] instanceof self::$userModel) {
-            throw new Exception('Instance of wrong class stored in session, ' . self::$userModel . ' expected.');
-        }
-        return $_SESSION[self::$sessionKeyForUser];
+        $userEntity->setMulti($_SESSION[self::$sessionKeyForUser]);
+
+        return $userEntity;
     }
 
     /**
@@ -82,24 +110,24 @@ class Auth
      * - an API script where the API key points to a user
      *
      * @param Model $userEntity
-     * @param bool $disallowOverwrite
+     * @param bool $allowOverwrite
      * @return void
      * @throws Exception
      * @throws \Atk4\Data\Exception
      */
-    public static function dangerouslySetLoggedInUser(Model $userEntity, bool $disallowOverwrite = true): void
+    public static function dangerouslySetLoggedInUser(Model $userEntity, bool $allowOverwrite = false): void
     {
         $userEntity->assertIsLoaded();
         if (
-            $disallowOverwrite
+            !$allowOverwrite
             && isset($_SESSION[self::$sessionKeyForUser])
-            && $_SESSION[self::$sessionKeyForUser] !== null
+            && isset($_SESSION[self::$sessionKeyForUser][$userEntity->idField])
         ) {
             throw new Exception('Cannot overwrite logged in user.');
         }
         if (!$userEntity instanceof self::$userModel) {
             throw new Exception('Instance of wrong class passed. ' . self::$userModel . ' expected.');
         }
-        $_SESSION[self::$sessionKeyForUser] = clone $userEntity;
+        $_SESSION[self::$sessionKeyForUser] = $userEntity->get();
     }
 }

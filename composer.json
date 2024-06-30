@@ -6,6 +6,7 @@
   "require": {
     "php": "8.*",
     "atk4/data": "5.*",
+    "atk4/login": "5.*",
     "philippgrashoff/atkdatamodeltraits": "5.*"
   },
   "require-dev": {
