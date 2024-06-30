@@ -11,39 +11,47 @@ class Auth
 {
     use HookTrait;
 
+    public const HOOK_BEFORE_LOGIN = self::class . '@beforeLogin';
     public const HOOK_LOGGED_IN = self::class . '@loggedIn';
     public const HOOK_BAD_LOGIN = self::class . '@badLogin';
-
-    /** @var string Which field to look up user by. */
-    public static string $fieldLogin = 'name';
-
-    /** @var string Password to be verified when authenticating. */
-    public static string $fieldPassword = 'password';
 
     /** @var string The key for $_SESSION array to store the logged-in user in */
     protected static string $sessionKeyForUser = '__atk_user';
 
+    /** @var class-string|Model The user model class to check against */
     protected static string $userModel = User::class;
 
-    public static function login(Model $userModel, string $username, string $password): void
-    {
+    public static function login(
+        Model $userModel,
+        string $username,
+        string $password,
+        string $fieldUsername = 'username',
+        string $fieldPassword = 'password'
+    ): void {
         // first logout
         self::logout();
-
         $userModel->assertIsModel();
-        //use tryLoadBy and throw generic exception to avoid username guessing
-        $userEntity = $userModel->tryLoadBy(self::$fieldLogin, $username);
-        if ($userEntity === null) {
-            throw new Exception('Invalid username or Password');
+        if(!$userModel instanceof self::$userModel) {
+            throw new Exception('Instance of wrong class passed. ' . self::$userModel . ' expected.');
         }
+
+        //use tryLoadBy and throw generic exception to avoid username guessing
+        $userEntity = $userModel->tryLoadBy($fieldUsername, $username);
+        if ($userEntity === null) {
+            throw new InvalidCredentialsException();
+        }
+
+        //can e.g. be used to check max. failed logins before another attempt
+        $userEntity->hook(self::HOOK_BEFORE_LOGIN, [$userEntity]);
+
         // verify if the password matches
-        $passwordField = PasswordField::assertInstanceOf($userEntity->getField(self::$fieldPassword));
+        $passwordField = PasswordField::assertInstanceOf($userEntity->getField($fieldPassword));
         if ($passwordField->verifyPassword($userEntity, $password)) {
             $userEntity->hook(self::HOOK_LOGGED_IN, [$userEntity]);
             $_SESSION[self::$sessionKeyForUser] = clone $userEntity;
         } else {
             $userEntity->hook(self::HOOK_BAD_LOGIN, [$userEntity]);
-            throw new Exception('Invalid username or Password');
+            throw new InvalidCredentialsException();
         }
     }
 
@@ -69,7 +77,7 @@ class Auth
     }
 
     /**
-     * This method should not be used unless for special occations where a user needs to be set, e.g.
+     * This method should not be used unless for special occasions where a user needs to be set, e.g.
      * - a script run by a cronjob
      * - an API script where the API key points to a user
      *
