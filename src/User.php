@@ -13,7 +13,6 @@ class User extends Model
     use UniqueFieldTrait;
 
     public $table = 'user';
-    public $caption = 'Benutzer';
 
     protected int $maxFailedLogins = 10;
 
@@ -74,7 +73,6 @@ class User extends Model
             }
         );
 
-
         //disallow login attempt if there were too many failed logins since last login
         $this->onHook(
             Auth::HOOK_BEFORE_LOGIN,
@@ -105,6 +103,11 @@ class User extends Model
         );
     }
 
+    public function setPassword(string $password): void
+    {
+        $this->getField('password')->setPassword($this, $password);
+    }
+
     public function setNewPassword(
         string $newPassword1,
         string $newPassword2,
@@ -112,24 +115,30 @@ class User extends Model
         string $oldPassword = ''
     ): void {
         //other user than logged-in user tries saving?
-        if (Auth::getLoggedInUser()->getId() !== $this->getId()) {
+        if (Auth::getInstance()->getLoggedInUser($this->getModel()->getPersistence())->getId() !== $this->getId()) {
             throw new Exception('Password can only be changed by account owner');
         }
 
         //old password entered needs to fit saved one
         if (
             $checkOldPassword
-            && !$this->compare('password', $oldPassword)
+            && !$this->getField('password')->verifyPassword($this, $oldPassword)
         ) {
             throw new Exception('The old password is incorrect');
         }
 
         //new passwords need to match
         if ($newPassword1 !== $newPassword2) {
-            throw new Exception('The 2 passwords do not match');
+            throw new Exception('The 2 new passwords do not match');
         }
 
-        $this->set('password', $newPassword1);
+        $this->getField('password')->setPassword($this, $newPassword1);
+    }
+
+
+    public function getRemainingLogins(): int
+    {
+        return $this->maxFailedLogins - $this->get('failed_logins');
     }
 
     /*

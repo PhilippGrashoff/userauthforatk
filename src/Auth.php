@@ -8,9 +8,24 @@ use Atk4\Data\Field\PasswordField;
 use Atk4\Data\Model;
 use Atk4\Data\Persistence;
 
+
+/**
+ * Singleton Pattern implementation taken from
+ * https://github.com/DesignPatternsPHP/DesignPatternsPHP/blob/main/Creational/Singleton/Singleton.php
+ * Usually, a singleton class in final and __construct() and __clone() are private. This is handled differently
+ * here to allow extending this class.
+ */
 class Auth
 {
     use HookTrait;
+
+    protected static ?Auth $instance = null;
+
+    /** @var class-string|Model The user model class to check against */
+    public static string $userModel = User::class;
+
+    /** @var Model|null an instance of the logged-in user */
+    protected ?Model $userEntity = null;
 
     public const HOOK_BEFORE_LOGIN = self::class . '@beforeLogin';
     public const HOOK_LOGGED_IN = self::class . '@loggedIn';
@@ -19,8 +34,36 @@ class Auth
     /** @var string The key for $_SESSION array to store the logged-in user in */
     protected static string $sessionKeyForUser = '__atk_user';
 
-    /** @var class-string|Model The user model class to check against */
-    public static string $userModel = User::class;
+    public static function getInstance(): Auth
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+
+        return self::$instance;
+    }
+
+    /**
+     * @codeCoverageIgnore;
+     */
+    protected function __construct()
+    {
+    }
+
+    /**
+     * @codeCoverageIgnore;
+     */
+    protected function __clone()
+    {
+    }
+
+    /**
+     * @codeCoverageIgnore;
+     */
+    public function __wakeup()
+    {
+        throw new Exception("Cannot unserialize singleton");
+    }
 
     /**
      * @param Model $userModel
@@ -33,7 +76,7 @@ class Auth
      * @throws InvalidCredentialsException
      * @throws \Atk4\Data\Exception
      */
-    public static function login(
+    public function login(
         Model $userModel,
         string $username,
         string $password,
@@ -63,6 +106,7 @@ class Auth
         if ($passwordField->verifyPassword($userEntity, $password)) {
             $userEntity->hook(self::HOOK_LOGGED_IN, [$userEntity]);
             $_SESSION[self::$sessionKeyForUser] = $userEntity->get();
+            $this->userEntity = clone $userEntity;
         } else {
             $userEntity->hook(self::HOOK_BAD_LOGIN, [$userEntity]);
             throw new InvalidCredentialsException();
@@ -74,9 +118,10 @@ class Auth
      *
      * @return void
      */
-    public static function logout(): void
+    public function logout(): void
     {
         $_SESSION[self::$sessionKeyForUser] = null;
+        $this->userEntity = null;
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_destroy();
         }
@@ -89,8 +134,11 @@ class Auth
      * @return Model
      * @throws Exception
      */
-    public static function getLoggedInUser(Persistence $persistence): Model
+    public function getLoggedInUser(Persistence $persistence): Model
     {
+        if ($this->userEntity) {
+            return $this->userEntity;
+        }
         $userEntity = (new self::$userModel($persistence))->createEntity();;
         //load user from session cache
         if (
@@ -100,8 +148,8 @@ class Auth
             throw new Exception('No logged in user available');
         }
         $userEntity->setMulti($_SESSION[self::$sessionKeyForUser]);
-
-        return $userEntity;
+        $this->userEntity = $userEntity;
+        return $this->userEntity;
     }
 
     /**
@@ -115,7 +163,7 @@ class Auth
      * @throws Exception
      * @throws \Atk4\Data\Exception
      */
-    public static function dangerouslySetLoggedInUser(Model $userEntity, bool $allowOverwrite = false): void
+    public function dangerouslySetLoggedInUser(Model $userEntity, bool $allowOverwrite = false): void
     {
         $userEntity->assertIsLoaded();
         if (
@@ -129,5 +177,6 @@ class Auth
             throw new Exception('Instance of wrong class passed. ' . self::$userModel . ' expected.');
         }
         $_SESSION[self::$sessionKeyForUser] = $userEntity->get();
+        $this->userEntity = $userEntity;
     }
 }

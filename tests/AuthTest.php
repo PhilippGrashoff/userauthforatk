@@ -26,78 +26,90 @@ class AuthTest extends TestCase
     {
         $user1 = $this->getTestUser();
         $user2 = $this->getTestUser('someothername', 'someotherpassword');
-        Auth::login(new User($this->db), $user1->get('username'), 'somepassword');
+        Auth::getInstance()->login(new User($this->db), $user1->get('username'), 'somepassword');
         self::expectExceptionMessage('A User is already logged in, logout prior to login!');
-        Auth::login($user2, $user2->get('username'), 'someotherpassword');
+        Auth::getInstance()->login($user2, $user2->get('username'), 'someotherpassword');
     }
 
     public function testLoginExceptionWrongModelClassPassed(): void
     {
         $someOtherUser = new SomeOtherUserClass($this->db);
         self::expectExceptionMessage('Instance of wrong class passed. ' . Auth::$userModel . ' expected.');
-        Auth::login($someOtherUser, '', '');
+        Auth::getInstance()->login($someOtherUser, '', '');
     }
 
     public function testLoginExceptionNoUserFound(): void
     {
         self::expectException(InvalidCredentialsException::class);
-        Auth::login(new User($this->db), 'somenonexistantusername', '');
+        Auth::getInstance()->login(new User($this->db), 'somenonexistantusername', '');
     }
 
     public function testLoginExceptionWrongPassword(): void
     {
         $user = $this->getTestUser();
         self::expectException(InvalidCredentialsException::class);
-        Auth::login(new User($this->db), $user->get('username'), 'somewrongpassword');
+        Auth::getInstance()->login(new User($this->db), $user->get('username'), 'somewrongpassword');
     }
 
-    public function testLoginSuccess(): void
+    public function testGetLoggedInUserAfterLogin(): void
     {
         $user = $this->getTestUser();
-        Auth::login(new User($this->db), $user->get('username'), 'somepassword');
-        self::assertSame($user->getId(), Auth::getLoggedInUser($this->db)->getId());
+        Auth::getInstance()->login(new User($this->db), $user->get('username'), 'somepassword');
+        self::assertSame($user->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
+    }
+
+    public function testGetLoggedInUserFromSession(): void
+    {
+        $user = $this->getTestUser();
+        $auth = Auth::getInstance();
+        $auth->login(new User($this->db), $user->get('username'), 'somepassword');
+        $helper = \Closure::bind(static function () use ($auth) {
+            $auth->userEntity = null;
+        }, null, $auth);
+        $helper();
+        self::assertSame($user->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
     }
 
     public function testGetLoggedInUserExceptionNoLoggedInUserAvaible(): void
     {
         self::expectExceptionMessage('No logged in user available');
-        Auth::getLoggedInUser($this->db);
+        Auth::getInstance()->getLoggedInUser($this->db);
     }
 
     public function testLogout(): void
     {
         $user = $this->getTestUser();
-        Auth::login(new User($this->db), $user->get('username'), 'somepassword');
-        self::assertSame($user->getId(), Auth::getLoggedInUser($this->db)->getId());
-        Auth::logout();
+        Auth::getInstance()->login(new User($this->db), $user->get('username'), 'somepassword');
+        self::assertSame($user->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
+        Auth::getInstance()->logout();
         self::expectExceptionMessage('No logged in user available');
-        Auth::getLoggedInUser($this->db);
+        Auth::getInstance()->getLoggedInUser($this->db);
     }
 
     public function testDangerouslySetLoggedInUser(): void
     {
         $user = $this->getTestUser();
-        Auth::dangerouslySetLoggedInUser($user);
-        self::assertSame($user->getId(), Auth::getLoggedInUser($this->db)->getId());
+        Auth::getInstance()->dangerouslySetLoggedInUser($user);
+        self::assertSame($user->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
     }
 
     public function testDangerouslySetLoggedInUserWithOverwrite(): void
     {
         $user1 = $this->getTestUser();
         $user2 = $this->getTestUser('someothername', 'someotherpassword');
-        Auth::login(new User($this->db), $user1->get('username'), 'somepassword');
-        self::assertSame($user1->getId(), Auth::getLoggedInUser($this->db)->getId());
-        Auth::dangerouslySetLoggedInUser($user2, true);
-        self::assertSame($user2->getId(), Auth::getLoggedInUser($this->db)->getId());
+        Auth::getInstance()->login(new User($this->db), $user1->get('username'), 'somepassword');
+        self::assertSame($user1->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
+        Auth::getInstance()->dangerouslySetLoggedInUser($user2, true);
+        self::assertSame($user2->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
     }
 
     public function testDangerouslySetLoggedInUserOverwriteException(): void
     {
         $user1 = $this->getTestUser();
         $user2 = $this->getTestUser('someothername', 'someotherpassword');
-        Auth::login(new User($this->db), $user1->get('username'), 'somepassword');
+        Auth::getInstance()->login(new User($this->db), $user1->get('username'), 'somepassword');
         self::expectExceptionMessage('Cannot overwrite logged in user.');
-        Auth::dangerouslySetLoggedInUser($user2);
+        Auth::getInstance()->dangerouslySetLoggedInUser($user2);
     }
 
     public function testDangerouslySetLoggedInUserExceptionWrongClass(): void
@@ -106,7 +118,7 @@ class AuthTest extends TestCase
         $someOtherUser = (new SomeOtherUserClass($this->db))->createEntity();
         $someOtherUser->save();
         self::expectExceptionMessage('Instance of wrong class passed. ' . Auth::$userModel . ' expected.');
-        Auth::dangerouslySetLoggedInUser($someOtherUser);
+        Auth::getInstance()->dangerouslySetLoggedInUser($someOtherUser);
     }
 
     protected function getTestUser(string $username = 'somename', string $password = 'somepassword'): User
