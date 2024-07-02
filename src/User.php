@@ -76,9 +76,9 @@ class User extends Model
         //disallow login attempt if there were too many failed logins since last login
         $this->onHook(
             Auth::HOOK_BEFORE_LOGIN,
-            function ($userEntity) {
+            function (self $userEntity) {
                 if ($userEntity->get('failed_logins') >= $this->maxFailedLogins) {
-                    throw new Exception('Too many login attempts since last failed logins');
+                    throw new Exception('Too many failed login attempts');
                 }
             }
         );
@@ -86,7 +86,7 @@ class User extends Model
         //reset failed logins to zero on successful login; store last login time
         $this->onHook(
             Auth::HOOK_LOGGED_IN,
-            function ($userEntity) {
+            function (self $userEntity) {
                 $userEntity->set('failed_logins', 0);
                 $userEntity->set('last_login', new \DateTime());
                 $userEntity->save();
@@ -96,7 +96,7 @@ class User extends Model
         //increase failed login counter by 1 in case of failed login attempt
         $this->onHook(
             Auth::HOOK_BAD_LOGIN,
-            function ($userEntity) {
+            function (self $userEntity) {
                 $userEntity->set('failed_logins', $userEntity->get('failed_logins') + 1);
                 $userEntity->save();
             }
@@ -115,7 +115,7 @@ class User extends Model
         string $oldPassword = ''
     ): void {
         //other user than logged-in user tries saving?
-        if (Auth::getInstance()->getLoggedInUser($this->getModel()->getPersistence())->getId() !== $this->getId()) {
+        if (Auth::getInstance()->getUser($this->getModel()->getPersistence())->getId() !== $this->getId()) {
             throw new Exception('Password can only be changed by account owner');
         }
 
@@ -132,7 +132,7 @@ class User extends Model
             throw new Exception('The 2 new passwords do not match');
         }
 
-        $this->getField('password')->setPassword($this, $newPassword1);
+        $this->setPassword($newPassword1);
     }
 
 

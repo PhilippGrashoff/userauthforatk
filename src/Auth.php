@@ -12,8 +12,6 @@ use Atk4\Data\Persistence;
 /**
  * Singleton Pattern implementation taken from
  * https://github.com/DesignPatternsPHP/DesignPatternsPHP/blob/main/Creational/Singleton/Singleton.php
- * Usually, a singleton class in final and __construct() and __clone() are private. This is handled differently
- * here to allow extending this class.
  */
 class Auth
 {
@@ -130,11 +128,13 @@ class Auth
     }
 
     /**
+     * retrieve the login User
+     *
      * @param Persistence $persistence
      * @return Model
      * @throws Exception
      */
-    public function getLoggedInUser(Persistence $persistence): Model
+    public function getUser(Persistence $persistence): Model
     {
         if ($this->userEntity) {
             return $this->userEntity;

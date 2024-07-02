@@ -28,14 +28,14 @@ class AuthTest extends TestCase
         $user2 = $this->getTestUser('someothername', 'someotherpassword');
         Auth::getInstance()->login(new User($this->db), $user1->get('username'), 'somepassword');
         self::expectExceptionMessage('A User is already logged in, logout prior to login!');
-        Auth::getInstance()->login($user2, $user2->get('username'), 'someotherpassword');
+        Auth::getInstance()->login($user2->getModel(), $user2->get('username'), 'someotherpassword');
     }
 
     public function testLoginExceptionWrongModelClassPassed(): void
     {
-        $someOtherUser = new SomeOtherUserClass($this->db);
+        $someOtherUserModel = new SomeOtherUserClass($this->db);
         self::expectExceptionMessage('Instance of wrong class passed. ' . Auth::$userModel . ' expected.');
-        Auth::getInstance()->login($someOtherUser, '', '');
+        Auth::getInstance()->login($someOtherUserModel, '', '');
     }
 
     public function testLoginExceptionNoUserFound(): void
@@ -51,14 +51,14 @@ class AuthTest extends TestCase
         Auth::getInstance()->login(new User($this->db), $user->get('username'), 'somewrongpassword');
     }
 
-    public function testGetLoggedInUserAfterLogin(): void
+    public function testGetUserAfterLogin(): void
     {
         $user = $this->getTestUser();
         Auth::getInstance()->login(new User($this->db), $user->get('username'), 'somepassword');
-        self::assertSame($user->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
+        self::assertSame($user->getId(), Auth::getInstance()->getUser($this->db)->getId());
     }
 
-    public function testGetLoggedInUserFromSession(): void
+    public function testGetUserFromSession(): void
     {
         $user = $this->getTestUser();
         $auth = Auth::getInstance();
@@ -67,30 +67,30 @@ class AuthTest extends TestCase
             $auth->userEntity = null;
         }, null, $auth);
         $helper();
-        self::assertSame($user->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
+        self::assertSame($user->getId(), Auth::getInstance()->getUser($this->db)->getId());
     }
 
-    public function testGetLoggedInUserExceptionNoLoggedInUserAvaible(): void
+    public function testGetUserExceptionNoLoggedInUserAvaible(): void
     {
         self::expectExceptionMessage('No logged in user available');
-        Auth::getInstance()->getLoggedInUser($this->db);
+        Auth::getInstance()->getUser($this->db);
     }
 
     public function testLogout(): void
     {
         $user = $this->getTestUser();
         Auth::getInstance()->login(new User($this->db), $user->get('username'), 'somepassword');
-        self::assertSame($user->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
+        self::assertSame($user->getId(), Auth::getInstance()->getUser($this->db)->getId());
         Auth::getInstance()->logout();
         self::expectExceptionMessage('No logged in user available');
-        Auth::getInstance()->getLoggedInUser($this->db);
+        Auth::getInstance()->getUser($this->db);
     }
 
     public function testDangerouslySetLoggedInUser(): void
     {
         $user = $this->getTestUser();
         Auth::getInstance()->dangerouslySetLoggedInUser($user);
-        self::assertSame($user->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
+        self::assertSame($user->getId(), Auth::getInstance()->getUser($this->db)->getId());
     }
 
     public function testDangerouslySetLoggedInUserWithOverwrite(): void
@@ -98,9 +98,9 @@ class AuthTest extends TestCase
         $user1 = $this->getTestUser();
         $user2 = $this->getTestUser('someothername', 'someotherpassword');
         Auth::getInstance()->login(new User($this->db), $user1->get('username'), 'somepassword');
-        self::assertSame($user1->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
+        self::assertSame($user1->getId(), Auth::getInstance()->getUser($this->db)->getId());
         Auth::getInstance()->dangerouslySetLoggedInUser($user2, true);
-        self::assertSame($user2->getId(), Auth::getInstance()->getLoggedInUser($this->db)->getId());
+        self::assertSame($user2->getId(), Auth::getInstance()->getUser($this->db)->getId());
     }
 
     public function testDangerouslySetLoggedInUserOverwriteException(): void
@@ -125,7 +125,7 @@ class AuthTest extends TestCase
     {
         $user = (new User($this->db))->createEntity();
         $user->set('username', $username);
-        $user->getField('password')->setPassword($user, $password);
+        $user->setPassword($password);
         $user->save();
 
         return $user;

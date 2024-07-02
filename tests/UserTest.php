@@ -21,49 +21,55 @@ class UserTest extends TestCase
         $this->createMigrator(new User($this->db))->create();
     }
 
-
-    public function testSetPassword(): void
-    {
-
-    }
-
     public function testLastLoginTimeStoredOnLogin(): void
     {
-        
+        $user = $this->getTestUser();
+        self::assertSame(null, $user->get('last_login'));
+        Auth::getInstance()->login($user->getModel(), $user->get('username'), 'somepassword');
+        $user->reload();
+        self::assertEqualsWithDelta((new \Datetime())->getTimestamp(), $user->get('last_login')->getTimestamp(), 1);
     }
 
     public function testFailedLoginIncrease(): void
     {
         $user = $this->getTestUser();
-        self::assertEquals(0, $user->get('failed_logins'));
+        self::assertSame(0, $user->get('failed_logins'));
         $this->makeFailedLogin($user);
         $user->reload();
-        self::assertEquals(1, $user->get('failed_logins'));
+        self::assertSame(1, $user->get('failed_logins'));
     }
 
     public function testGetRemainingLogins(): void
     {
         $user = $this->getTestUser();
-        self::assertEquals(10, $user->getRemainingLogins());
+        self::assertSame(10, $user->getRemainingLogins());
         $this->makeFailedLogin($user);
         $user->reload();
-        self::assertEquals(9, $user->getRemainingLogins());
+        self::assertSame(9, $user->getRemainingLogins());
         $helper = \Closure::bind(static function () use ($user) {
             $user->maxFailedLogins = 1;
         }, null, $user);
         $helper();
-        self::assertEquals(0, $user->getRemainingLogins());
+        self::assertSame(0, $user->getRemainingLogins());
     }
 
+    public function testTooManyFailedLoginsException(): void
+    {
+        $user = $this->getTestUser();
+        $user->set('failed_logins', 10);
+        $user->save();
+        self::expectExceptionMessage('Too many failed login attempts');
+        Auth::getInstance()->login($user->getModel(), $user->get('username'), 'somepassword');
+    }
     public function testSetFailedLoginsToZeroOnSuccessfulLogin(): void
     {
         $user = $this->getTestUser();
         $this->makeFailedLogin($user);
         $user->reload();
-        self::assertEquals(1, $user->get('failed_logins'));
+        self::assertSame(1, $user->get('failed_logins'));
         Auth::getInstance()->login($user->getModel(), $user->get('username'), 'somepassword');
         $user->reload();
-        self::assertEquals(0, $user->get('failed_logins'));
+        self::assertSame(0, $user->get('failed_logins'));
     }
 
     public function testUserNameUnique(): void
@@ -115,7 +121,7 @@ class UserTest extends TestCase
     {
         $user = (new User($this->db))->createEntity();
         $user->set('username', $username);
-        $user->getField('password')->setPassword($user, $password);
+        $user->setPassword($password);
         $user->save();
 
         return $user;
