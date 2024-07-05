@@ -145,7 +145,7 @@ class Auth
             !isset($_SESSION[self::$sessionKeyForUser])
             || !isset($_SESSION[self::$sessionKeyForUser][$userEntity->idField])
         ) {
-            throw new Exception('No logged in user available');
+            throw new NoLoggedInUserException();
         }
         $userEntity->setMulti($_SESSION[self::$sessionKeyForUser]);
         $this->userEntity = $userEntity;

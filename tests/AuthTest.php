@@ -6,6 +6,7 @@ use Atk4\Data\Persistence\Sql;
 use Atk4\Data\Schema\TestCase;
 use PhilippR\Atk4\UserAuth\Auth;
 use PhilippR\Atk4\UserAuth\InvalidCredentialsException;
+use PhilippR\Atk4\UserAuth\NoLoggedInUserException;
 use PhilippR\Atk4\UserAuth\Tests\TestModels\SomeOtherUserClass;
 use PhilippR\Atk4\UserAuth\User;
 
@@ -70,9 +71,9 @@ class AuthTest extends TestCase
         self::assertSame($user->getId(), Auth::getInstance()->getUser($this->db)->getId());
     }
 
-    public function testGetUserExceptionNoLoggedInUserAvaible(): void
+    public function testGetUserExceptionNoLoggedInUserAvailable(): void
     {
-        self::expectExceptionMessage('No logged in user available');
+        self::expectException(NoLoggedInUserException::class);
         Auth::getInstance()->getUser($this->db);
     }
 
@@ -82,7 +83,7 @@ class AuthTest extends TestCase
         Auth::getInstance()->login(new User($this->db), $user->get('username'), 'somepassword');
         self::assertSame($user->getId(), Auth::getInstance()->getUser($this->db)->getId());
         Auth::getInstance()->logout();
-        self::expectExceptionMessage('No logged in user available');
+        self::expectException(NoLoggedInUserException::class);
         Auth::getInstance()->getUser($this->db);
     }
 
